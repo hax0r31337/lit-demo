@@ -20,11 +20,17 @@
         "experimentalDecorators": true,
         "forceConsistentCasingInFileNames": true,
         "noImplicitOverride": true,
+        "esModuleInterop": true,
         "plugins": [
             {
                 "name": "ts-lit-plugin",
                 "strict": true
             }
         ]
+    },
+    "ts-node": {
+        "compilerOptions": {
+            "module": "CommonJS"
+        }
     }
 }

@@ -1,13 +1,12 @@
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
+import webpack from 'webpack';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import HtmlParser from 'node-html-parser';
 import ESLintPlugin from 'eslint-webpack-plugin';
+import CopyPlugin from 'copy-webpack-plugin';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-let config = {
+let config: webpack.Configuration = {
     entry: {},
     module: {
         rules: [
@@ -26,7 +25,13 @@ let config = {
         path: path.resolve(__dirname, 'dist'),
         clean: true,
     },
-    plugins: [],
+    plugins: [
+        new CopyPlugin({
+            patterns: [
+                { from: path.resolve(__dirname, 'assets'), to: path.resolve(__dirname, 'dist', 'assets') },
+            ],
+        }),
+    ],
     optimization: {
         chunkIds: 'deterministic',
         splitChunks: {
@@ -36,8 +41,8 @@ let config = {
 }
 
 
-function findFilesInSubdirs(dir, filter) {
-    const files = [];
+function findFilesInSubdirs(dir: string, filter: (filename: string) => boolean): string[] {
+    const files: string[] = [];
     fs.readdirSync(dir).forEach(file => {
         const filePath = path.join(dir, file);
         if (fs.statSync(filePath).isDirectory()) {
@@ -49,11 +54,11 @@ function findFilesInSubdirs(dir, filter) {
     return files;
 }
 
-const pagesDir = path.resolve(__dirname, 'src/pages');
+const pagesDir = path.resolve(__dirname, 'src', 'pages');
 findFilesInSubdirs(pagesDir, file => file.endsWith('.html') || file.endsWith('.ejs'))
     .forEach(file => {
         const dom = HtmlParser.parse(fs.readFileSync(file, 'utf8'));
-        var options = {
+        var options: HtmlWebpackPlugin.Options = {
             filename: path.relative(pagesDir, file),
             chunks: [],
             scriptLoading: 'module',
@@ -64,11 +69,13 @@ findFilesInSubdirs(pagesDir, file => file.endsWith('.html') || file.endsWith('.e
         // get scripts
         dom.querySelectorAll('script').forEach(script => {
             const src = script.getAttribute('src');
-            const dir = path.resolve(path.dirname(file), src);
+            const dir = path.resolve(path.dirname(file), src!);
 
             if (fs.existsSync(dir)) {
-                options.chunks.push(dir);
-                config.entry[dir] = dir;
+                if (Array.isArray(options.chunks)) {
+                    options.chunks.push(dir);
+                }
+                (config.entry as Record<string, string>)[dir] = dir;
             }
 
             script.remove();
@@ -76,13 +83,13 @@ findFilesInSubdirs(pagesDir, file => file.endsWith('.html') || file.endsWith('.e
 
         options.templateContent = dom.toString();
 
-        config.plugins.push(new HtmlWebpackPlugin(options));
+        config.plugins!.push(new HtmlWebpackPlugin(options));
     });
 
-export default (env, argv) => {
+export default (_env: any, argv: { mode: string }) => {
     if (argv.mode === 'production') {
         // enable ESLint in production only
-        config.plugins.push(
+        config.plugins!.push(
             new ESLintPlugin({
                 extensions: ['js', 'ts'],
                 threads: true,
