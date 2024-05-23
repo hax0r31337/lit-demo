@@ -1,10 +1,10 @@
-import path from 'path';
-import fs from 'fs';
-import webpack from 'webpack';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
-import HtmlParser from 'node-html-parser';
-import ESLintPlugin from 'eslint-webpack-plugin';
-import CopyPlugin from 'copy-webpack-plugin';
+import path from "path";
+import fs from "fs";
+import webpack from "webpack";
+import HtmlWebpackPlugin from "html-webpack-plugin";
+import ESLintPlugin from "eslint-webpack-plugin";
+import CopyPlugin from "copy-webpack-plugin";
+import "webpack-dev-server";
 
 let config: webpack.Configuration = {
     entry: {},
@@ -12,38 +12,52 @@ let config: webpack.Configuration = {
         rules: [
             {
                 test: /\.ts$/,
-                use: 'ts-loader',
+                use: "ts-loader",
                 exclude: /node_modules/,
             },
         ],
     },
     resolve: {
-        extensions: ['.ts', '.js'],
+        extensions: [".ts", ".js"],
     },
     output: {
-        filename: 'scripts/[chunkhash].js',
-        path: path.resolve(__dirname, 'dist'),
+        filename: "scripts/[chunkhash].js",
+        path: path.resolve(__dirname, "dist"),
         clean: true,
     },
     plugins: [
         new CopyPlugin({
             patterns: [
-                { from: path.resolve(__dirname, 'assets'), to: path.resolve(__dirname, 'dist', 'assets') },
+                {
+                    from: path.resolve(__dirname, "assets"),
+                    to: path.resolve(__dirname, "dist", "assets"),
+                },
             ],
         }),
     ],
     optimization: {
-        chunkIds: 'deterministic',
+        chunkIds: "deterministic",
         splitChunks: {
-            chunks: 'all',
+            chunks: "all",
         },
-    }
-}
+    },
+    devtool: false,
+    devServer: {
+        hot: true,
+        liveReload: true,
+        client: {
+            overlay: true,
+            reconnect: true,
+        },
+    },
+};
 
-
-function findFilesInSubdirs(dir: string, filter: (filename: string) => boolean): string[] {
+function findFilesInSubdirs(
+    dir: string,
+    filter: (filename: string) => boolean
+): string[] {
     const files: string[] = [];
-    fs.readdirSync(dir).forEach(file => {
+    fs.readdirSync(dir).forEach((file) => {
         const filePath = path.join(dir, file);
         if (fs.statSync(filePath).isDirectory()) {
             files.push(...findFilesInSubdirs(filePath, filter)); // Recursion
@@ -54,47 +68,38 @@ function findFilesInSubdirs(dir: string, filter: (filename: string) => boolean):
     return files;
 }
 
-const pagesDir = path.resolve(__dirname, 'src', 'pages');
-findFilesInSubdirs(pagesDir, file => file.endsWith('.html') || file.endsWith('.ejs'))
-    .forEach(file => {
-        const dom = HtmlParser.parse(fs.readFileSync(file, 'utf8'));
-        var options: HtmlWebpackPlugin.Options = {
+const pagesDir = path.resolve(__dirname, "src", "pages");
+findFilesInSubdirs(
+    pagesDir,
+    (file) => file.endsWith(".html") || file.endsWith(".ejs")
+).forEach((file) => {
+    (config.entry as webpack.EntryObject)[file] = file.replace(
+        /\.(html|ejs)$/,
+        ".ts"
+    );
+
+    config.plugins!.push(
+        new HtmlWebpackPlugin({
             filename: path.relative(pagesDir, file),
-            chunks: [],
-            scriptLoading: 'module',
-            chunksSortMode: 'manual',
+            chunks: [file],
+            scriptLoading: "module",
+            chunksSortMode: "manual",
             xhtml: true,
-        }
-
-        // get scripts
-        dom.querySelectorAll('script').forEach(script => {
-            const src = script.getAttribute('src');
-            const dir = path.resolve(path.dirname(file), src!);
-
-            if (fs.existsSync(dir)) {
-                if (Array.isArray(options.chunks)) {
-                    options.chunks.push(dir);
-                }
-                (config.entry as Record<string, string>)[dir] = dir;
-            }
-
-            script.remove();
-        });
-
-        options.templateContent = dom.toString();
-
-        config.plugins!.push(new HtmlWebpackPlugin(options));
-    });
+            inject: "head",
+            template: file,
+        })
+    );
+});
 
 export default (_env: any, argv: { mode: string }) => {
-    if (argv.mode === 'production') {
+    if (argv.mode === "production") {
         // enable ESLint in production only
         config.plugins!.push(
             new ESLintPlugin({
-                extensions: ['js', 'ts'],
+                extensions: ["js", "ts"],
                 threads: true,
             })
-        )
+        );
     }
     return config;
 };
